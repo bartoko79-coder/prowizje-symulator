@@ -78,6 +78,103 @@ def commission_rate_cumulative(offer_rate, Ow):
         steps_G = int(round(used_G / 0.1))
         extra += steps_G * extra_G
     return base_rate + extra
+# ----------------------
+# KALKULATOR PROWIZJI W ZŁ – 7 SEKCJI (tylko scenariusz ref 3.75% jako baza)
+# ----------------------
+
+st.markdown("## 💰 Kalkulator prowizji w zł (ref 3,75%)")
+
+# Ow dla scenariusza ref 3.75% – baza do wyliczeń
+ref_base_name = "ref 3.75%"
+ref_base_value = ref_scenarios[ref_base_name]
+Ow_base = Ow_from_ref(ref_base_value)
+
+st.caption(
+    f"Obliczenia poniżej używają scenariusza **{ref_base_name}** "
+    f"(ref = {ref_base_value:.2f}%, Ow = {Ow_base:.2f}%) i aktualnych pasm A–G."
+)
+
+# Domyślne wartości startowe
+default_amounts = [5000, 7000, 10000, 15000, 20000, 25000, 30000]
+default_rates = [14.5, 14.0, 13.5, 13.0, 12.5, 12.0, 11.5]
+
+calc_cols = st.columns(1)[0]  # kontener na całą tabelę
+
+rows_data = []  # tu zbierzemy dane do podsumowania
+
+for i in range(7):
+    st.markdown(f"#### Sekcja {i+1}")
+    col_l, col_r = st.columns([2, 3])
+
+    with col_l:
+        kwota = st.number_input(
+            f"Kwota pożyczki [{i+1}] (zł)",
+            min_value=0.0,
+            max_value=1_000_000.0,
+            value=float(default_amounts[i]),
+            step=100.0,
+            key=f"kwota_{i}",
+            format="%.2f",
+        )
+        oprocent = st.number_input(
+            f"Oprocentowanie oferty [{i+1}] (%)",
+            min_value=0.0,
+            max_value=30.0,
+            value=float(default_rates[i]),
+            step=0.1,
+            key=f"oprocent_{i}",
+            format="%.2f",
+        )
+
+    with col_r:
+        # Liczymy prowizję dla tej kwoty i stopy, używając tylko Ow_base
+        stawka_frac = commission_rate_cumulative(oprocent, Ow_base)
+        stawka_pct = stawka_frac * 100
+        prow_kwota = kwota * stawka_frac
+
+        st.metric(
+            label=f"Prowizja [{i+1}]",
+            value=f"{prow_kwota:,.2f} zł".replace(",", " ").replace(".", ","),
+            delta=f"{stawka_pct:.2f} %",
+        )
+
+        rows_data.append(
+            {
+                "sekcja": i + 1,
+                "kwota": kwota,
+                "oprocent": oprocent,
+                "stawka_pct": stawka_pct,
+                "prow_kwota": prow_kwota,
+            }
+        )
+
+st.markdown("### Podsumowanie wprowadzonych kwot i prowizji (ref 3,75%)")
+
+if rows_data:
+    suma_kwot = sum(r["kwota"] for r in rows_data)
+    suma_prow = sum(r["prow_kwota"] for r in rows_data)
+    # Średnia prowizja % (prosta)
+    sr_stawka = (
+        sum(r["stawka_pct"] for r in rows_data if r["kwota"] > 0)
+        / max(len([r for r in rows_data if r["kwota"] > 0]), 1)
+    )
+
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.metric(
+            "Suma kwot pożyczek",
+            f"{suma_kwot:,.2f} zł".replace(",", " ").replace(".", ","),
+        )
+    with col_s2:
+        st.metric(
+            "Suma prowizji",
+            f"{suma_prow:,.2f} zł".replace(",", " ").replace(".", ","),
+        )
+    with col_s3:
+        st.metric(
+            "Średnia prowizja (%)",
+            f"{sr_stawka:.2f} %",
+        )
 
 # ----------------------
 # Obliczenia dla scenariuszy
@@ -218,34 +315,81 @@ with col_pdf:
     # Tytuł u góry
     c.setFont("Helvetica-Bold", 14)
     title_text = f"Symulator Prowizji | Ow={Ow_multiplier:.1f}×ref+{Ow_const:.1f}%, stała {base_rate*100:.2f}%"
-    c.drawString(40, height_pdf - 50, title_text)
+    c.drawString(40, height_pdf - 40, title_text)
 
-    # Parametry pod tytułem (opcjonalnie, możesz usunąć te 3 linie jeśli nie chcesz)
+    # Krótki opis pod tytułem
     c.setFont("Helvetica", 10)
-    c.drawString(40, height_pdf - 70, f"Kwota kredytu: {loan_amount:,.0f} zł")
-    c.drawString(40, height_pdf - 85, f"Zakres oprocentowania: {start_rate:.1f}% → {end_rate:.1f}%, krok {step_rate:.1f} p.p.")
+    c.drawString(40, height_pdf - 60, f"Kwota referencyjna (wykres): {loan_amount:,.0f} zł".replace(",", " "))
+    c.drawString(40, height_pdf - 75, f"Zakres oprocentowania: {start_rate:.1f}% → {end_rate:.1f}%, krok {step_rate:.1f} p.p.")
 
-    # Ustawienia dla obrazka
-    # marginesy: lewy/prawy po 40, górny 120, dolny 60
+    # -------------------
+    # WYKRES – STAŁA RAMKA
+    # -------------------
     left_margin = 40
     right_margin = 40
-    top_margin = 120
-    bottom_margin = 60
 
-    max_width = width_pdf - left_margin - right_margin      # maks. szerokość wykresu
-    max_height = height_pdf - top_margin - bottom_margin    # maks. wysokość wykresu
+    # Stała wysokość i pozycja wykresu: tuż pod opisem, ale nad tabelą
+    plot_top_y = height_pdf - 90       # górna krawędź ramki na wykres (bliżej tytułu)
+    plot_height = 260                  # wysokość ramki na wykres
+    plot_bottom_y = plot_top_y - plot_height
 
-    # Wstawiamy obraz, dopasowując go do ramki (max_width x max_height)
-    # anchor='n' – kotwica na środku górnej krawędzi (pod tytułem)
+    plot_width = width_pdf - left_margin - right_margin
+
     c.drawImage(
         "temp.png",
-        left_margin,                  # x (lewy margines)
-        height_pdf - top_margin - max_height,  # y: górna ramka - max_height
-        width=max_width,
-        height=max_height,
+        left_margin,
+        plot_bottom_y,
+        width=plot_width,
+        height=plot_height,
         preserveAspectRatio=True,
-        anchor='n'
+        anchor='sw'
     )
+
+    # -------------------
+    # TABELA Z KALKULATORA POD WYKRESEM
+    # -------------------
+    # start tabeli = trochę poniżej dolnej krawędzi wykresu
+    table_start_y = plot_bottom_y - 130  # 130 pts pod wykresem
+    row_height = 14
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, table_start_y + row_height * 7 + 8, "Kalkulator prowizji (ref 3,75%) – zestawienie 7 sekcji")
+
+    # Nagłówki tabeli
+    headers = ["Sekcja", "Kwota [zł]", "Oprocentowanie [%]", "Prowizja [%]", "Prowizja [zł]"]
+    col_x = [40, 110, 230, 360, 460]
+
+    header_y = table_start_y + row_height * 6
+    for x, header in zip(col_x, headers):
+        c.drawString(x, header_y, header)
+
+    c.setFont("Helvetica", 9)
+
+    # Wiersze danych
+    for idx, r in enumerate(rows_data[:7]):
+        y = table_start_y + row_height * (5 - idx)
+        c.drawString(col_x[0], y, f"{r['sekcja']}")
+        c.drawRightString(col_x[1] + 60, y, f"{r['kwota']:,.2f}".replace(",", " ").replace(".", ","))
+        c.drawRightString(col_x[2] + 80, y, f"{r['oprocent']:.2f}".replace(".", ","))
+        c.drawRightString(col_x[3] + 60, y, f"{r['stawka_pct']:.2f}".replace(".", ","))
+        c.drawRightString(col_x[4] + 70, y, f"{r['prow_kwota']:,.2f}".replace(",", " ").replace(".", ","))
+
+    # Podsumowanie pod tabelą
+    if rows_data:
+        suma_kwot = sum(r["kwota"] for r in rows_data)
+        suma_prow = sum(r["prow_kwota"] for r in rows_data)
+        sr_stawka = (
+            sum(r["stawka_pct"] for r in rows_data if r["kwota"] > 0)
+            / max(len([r for r in rows_data if r["kwota"] > 0]), 1)
+        )
+
+        sum_y = table_start_y - 40
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(40, sum_y, "Podsumowanie:")
+        c.setFont("Helvetica", 9)
+        c.drawString(120, sum_y, f"Suma kwot: {suma_kwot:,.2f} zł".replace(",", " ").replace(".", ","))
+        c.drawString(120, sum_y - 12, f"Suma prowizji: {suma_prow:,.2f} zł".replace(",", " ").replace(".", ","))
+        c.drawString(120, sum_y - 24, f"Średnia prowizja: {sr_stawka:.2f} %".replace(".", ","))
 
     c.save()
     pdf_buffer.seek(0)
@@ -253,7 +397,7 @@ with col_pdf:
     st.download_button(
         label="💾 Pobierz PDF",
         data=pdf_buffer.getvalue(),
-        file_name=f"prowizje_Ow{Ow_multiplier:.1f}_st{base_rate*100:.2f}.pdf",
+        file_name=f"prowizje_Ow{Ow_multiplier:.1f}_st{base_rate*100:.2f}_z_kalkulatorem.pdf",
         mime="application/pdf",
         width=200,
     )
