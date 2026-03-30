@@ -214,13 +214,39 @@ with col_pdf:
     pdf_buffer = io.BytesIO()
     c = canvas.Canvas(pdf_buffer, pagesize=A4)
     width_pdf, height_pdf = A4
+
+    # Tytuł u góry
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(
-        40,
-        height_pdf - 40,
-        f"Symulator Prowizji | Ow={Ow_multiplier:.1f}×ref+{Ow_const:.1f}%, stała {base_rate*100:.2f}%",
+    title_text = f"Symulator Prowizji | Ow={Ow_multiplier:.1f}×ref+{Ow_const:.1f}%, stała {base_rate*100:.2f}%"
+    c.drawString(40, height_pdf - 50, title_text)
+
+    # Parametry pod tytułem (opcjonalnie, możesz usunąć te 3 linie jeśli nie chcesz)
+    c.setFont("Helvetica", 10)
+    c.drawString(40, height_pdf - 70, f"Kwota kredytu: {loan_amount:,.0f} zł")
+    c.drawString(40, height_pdf - 85, f"Zakres oprocentowania: {start_rate:.1f}% → {end_rate:.1f}%, krok {step_rate:.1f} p.p.")
+
+    # Ustawienia dla obrazka
+    # marginesy: lewy/prawy po 40, górny 120, dolny 60
+    left_margin = 40
+    right_margin = 40
+    top_margin = 120
+    bottom_margin = 60
+
+    max_width = width_pdf - left_margin - right_margin      # maks. szerokość wykresu
+    max_height = height_pdf - top_margin - bottom_margin    # maks. wysokość wykresu
+
+    # Wstawiamy obraz, dopasowując go do ramki (max_width x max_height)
+    # anchor='n' – kotwica na środku górnej krawędzi (pod tytułem)
+    c.drawImage(
+        "temp.png",
+        left_margin,                  # x (lewy margines)
+        height_pdf - top_margin - max_height,  # y: górna ramka - max_height
+        width=max_width,
+        height=max_height,
+        preserveAspectRatio=True,
+        anchor='n'
     )
-    c.drawImage("temp.png", 40, height_pdf - 350, width=500, preserveAspectRatio=True)
+
     c.save()
     pdf_buffer.seek(0)
 
