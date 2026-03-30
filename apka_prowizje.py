@@ -230,5 +230,4 @@ with col_pdf:
         file_name=f"prowizje_Ow{Ow_multiplier:.1f}_st{base_rate*100:.2f}.pdf",
         mime="application/pdf",
         width=200,
-    )
-    update app code
+    )update app code
