@@ -36,14 +36,14 @@ with col2:
 
 # Pasma jako lista
 bands = [
-    (0, 1, band_A),
-    (1, 2, band_B),
-    (2, 3, band_C),
-    (3, 4, band_D),
-    (4, 5, band_E),
-    (5, 6, band_F),
+    (0.0, 0.9, band_A),   # A: 0,0–0,9 p.p.
+    (0.9, 1.9, band_B),   # B: 0,9–1,9
+    (1.9, 2.9, band_C),   # C: 1,9–2,9
+    (2.9, 3.9, band_D),   # D: 2,9–3,9
+    (3.9, 4.9, band_E),   # E: 3,9–4,9
+    (4.9, 5.9, band_F),   # F: 4,9–5,9
 ]
-
+# extra_G (G > 5,9 p.p.) zostaje tak, jak masz w sliderze
 loan_amount = 100000
 
 ref_scenarios = {
@@ -59,26 +59,53 @@ ref_scenarios = {
 # ----------------------
 # Funkcje obliczeniowe
 # ----------------------
-def Ow_from_ref(ref):
-    return Ow_multiplier * ref + Ow_const
+def Ow_from_ref(ref: float) -> float:
+    # ref_r – ref zaokrąglone do 0,1
+    ref_r = round(ref, 1)
+    # Ow liczone z zaokrąglonego ref
+    Ow_exact = Ow_multiplier * ref_r + Ow_const
+    # Ow zaokrąglone do 0,1
+    Ow = round(Ow_exact, 1)
+    return Ow
 
-def commission_rate_cumulative(offer_rate, Ow):
+def commission_rate_cumulative(offer_rate: float, Ow: float) -> float:
+    """
+    Liczy ostateczną stawkę prowizji (w ułamku, np. 0.0235 = 2,35%)
+    dla danego oprocentowania oferty i Ow.
+    """
+    # 1. Różnica między ofertą a Ow
     diff = offer_rate - Ow
+
+    # 2. Jeśli poniżej Ow → minimalna prowizja 0,10%
     if diff < 0:
-        return 0.001
+        return 0.001  # 0,10%
+
+    # 3. Dodatkowa prowizja z progów A–G
     extra = 0.0
+
+    # Progi A–F
     for low, high, step_rate in bands:
+        # Jeśli różnica diff jest mniejsza lub równa dolnej granicy pasma,
+        # to to pasmo jeszcze w ogóle nie działa → pomijamy
         if diff <= low:
             continue
+
+        # Ile z diff "wpada" do tego konkretnego pasma
         used = min(diff, high) - low
+        # Przeliczamy na kroki po 0,1 p.p. i zaokrąglamy do najbliższej liczby kroków
         steps = int(round(used / 0.1))
-        extra += steps * step_rate
-    if diff > 6:
-        used_G = diff - 6
+        if steps > 0:
+            extra += steps * step_rate
+
+    # Próg G – wszystko powyżej 5,9 p.p. różnicy
+    if diff > 5.9:
+        used_G = diff - 5.9
         steps_G = int(round(used_G / 0.1))
-        extra += steps_G * extra_G
-    return base_rate + extra
-# ----------------------
+        if steps_G > 0:
+            extra += steps_G * extra_G
+
+    # 4. Końcowa stawka = baza + suma z progów
+    return base_rate + extra# ----------------------
 # KALKULATOR PROWIZJI W ZŁ – 7 SEKCJI (tylko scenariusz ref 3.75% jako baza)
 # ----------------------
 
