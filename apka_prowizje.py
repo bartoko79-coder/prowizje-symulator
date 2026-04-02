@@ -106,15 +106,21 @@ def commission_rate_cumulative(offer_rate: float, Ow: float) -> float:
 
     # 4. Końcowa stawka = baza + suma z progów
     return base_rate + extra# ----------------------
-# KALKULATOR PROWIZJI W ZŁ – 7 SEKCJI (tylko scenariusz ref 3.75% jako baza)
-# ----------------------
+# KALKULATOR PROWIZJI W ZŁ – 7 SEKCJI
+st.markdown("## 💰 Kalkulator prowizji w zł")
 
-st.markdown("## 💰 Kalkulator prowizji w zł (ref 3,75%)")
+# Wybór scenariusza ref dla kalkulatora
+ref_base_name = st.selectbox(
+    "Wybierz scenariusz stopy referencyjnej (dla kalkulatora poniżej):",
+    list(ref_scenarios.keys()),
+    index=list(ref_scenarios.keys()).index("ref 3.75%")  # domyślnie 3,75%
+)
 
-# Ow dla scenariusza ref 3.75% – baza do wyliczeń
-ref_base_name = "ref 3.75%"
 ref_base_value = ref_scenarios[ref_base_name]
 Ow_base = Ow_from_ref(ref_base_value)
+
+# maksymalne oprocentowanie oferty dla wybranego ref
+max_r_base = 2 * (ref_base_value + 3.5)
 
 st.caption(
     f"Obliczenia poniżej używają scenariusza **{ref_base_name}** "
@@ -154,10 +160,20 @@ for i in range(7):
         )
 
     with col_r:
-        # Liczymy prowizję dla tej kwoty i stopy, używając tylko Ow_base
-        stawka_frac = commission_rate_cumulative(oprocent, Ow_base)
-        stawka_pct = stawka_frac * 100
-        prow_kwota = kwota * stawka_frac
+        # Jeśli oprocentowanie przekracza max_r dla wybranego ref – nie liczymy
+        if oprocent > max_r_base:
+            st.warning(
+                f"Max oprocentowanie dla {ref_base_name} to {max_r_base:.2f}%. "
+                f"Podane {oprocent:.2f}% jest powyżej limitu."
+            )
+            stawka_frac = 0.0
+            stawka_pct = 0.0
+            prow_kwota = 0.0
+        else:
+            # Liczymy prowizję dla tej kwoty i stopy, używając Ow_base
+            stawka_frac = commission_rate_cumulative(oprocent, Ow_base)
+            stawka_pct = stawka_frac * 100
+            prow_kwota = kwota * stawka_frac
 
         st.metric(
             label=f"Prowizja [{i+1}]",
