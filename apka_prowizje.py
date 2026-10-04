@@ -96,7 +96,7 @@ def commission_amount(loan_amount, rate_fraction) -> float:
 
 # Konfiguracja strony
 st.set_page_config(page_title="Symulator Prowizji", layout="wide")
-st.title("🔥 Symulator Prowizji Bankowych")
+st.title("🔥 Symulator Prowizji ")
 
 # ==========================================================================
 # ZAKŁADKI: Oryginał (schodkowy) + Alternatywny (wielomian)
